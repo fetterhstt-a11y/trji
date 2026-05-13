@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "trji",
+  "version": "${version}",
+  "name": "trji",
+  "description": "Standalone trji addon for OdinFabric.",
+  "icon": "assets/trji/icon.png",
+  "authors": ["Starred"],
+  "license": "BSD-3-Clause",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      {
+        "adapter": "kotlin",
+        "value": "com.autoleap.AutoLeapAddon"
+      }
+    ]
+  },
+  "mixins": [
+    "autoLeap.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.17",
+    "fabric-api": "*",
+    "fabric-language-kotlin": "*",
+    "minecraft": "~1.21.11",
+    "odin": "*"
+  }
+}
