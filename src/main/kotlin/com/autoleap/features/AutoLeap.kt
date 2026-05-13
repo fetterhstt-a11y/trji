@@ -7,6 +7,7 @@ import com.odtheking.odin.clickgui.settings.impl.SelectorSetting
 import com.odtheking.odin.events.ChatPacketEvent
 import com.odtheking.odin.events.ScreenEvent
 import com.odtheking.odin.events.TickEvent
+import com.odtheking.odin.events.WorldEvent
 import com.odtheking.odin.events.core.on
 import com.odtheking.odin.features.Category
 import com.odtheking.odin.features.Module
@@ -61,6 +62,12 @@ object AutoLeap : Module(
     private var leapClickTicks = 0
 
     init {
+        on<WorldEvent.Load> {
+            pyAutoLeaped = false
+            currentSection = "Unknown"
+            leapState = LeapState.IDLE
+        }
+
         on<TickEvent.Start> {
             if (DungeonUtils.inDungeons) updateCurrentSection()
             tickLeapStateMachine()
@@ -95,7 +102,7 @@ object AutoLeap : Module(
                     handleLeap(completedSection = "EE1")
                 }
 
-                message.contains("[BOSS] Goldor: ...") -> {
+                message.contains("[BOSS] Goldor: YOU ARE FACE TO FACE WITH GOLDOR!") -> {
                     if (printDialogue) modMessage("found dialogue: $message")
                     handleLeap(completedSection = "3x3")
                 }
@@ -278,8 +285,7 @@ object AutoLeap : Module(
 
         if (newSection != currentSection) {
             if (debugMode) modMessage("§7[AutoLeap] Section: $currentSection -> $newSection (${x.toInt()},${y.toInt()},${z.toInt()})")
-            if (currentSection == "PY" && newSection != "PY") pyAutoLeaped = false
-        }
+            }
         currentSection = newSection
     }
 

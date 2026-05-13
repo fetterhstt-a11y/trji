@@ -39,6 +39,7 @@ object BigTimer : Module(
     private var roomStartTime = 0L
     private var currentRoomName = ""
     private var currentRoomMax = 0
+    private var roomStartSecrets = 0
     private var roomCompleted = false
     private var fakeSecrets = 0
     private var fakePositions = mutableSetOf<String>()
@@ -59,12 +60,13 @@ object BigTimer : Module(
             resetRoomState()
             currentRoomName = name
             currentRoomMax = max
+            roomStartSecrets = DungeonUtils.secretCount
             roomStartTime = System.currentTimeMillis()
         }
 
         on<TickEvent.Start> {
             if (!DungeonUtils.inDungeons || roomCompleted || roomStartTime == 0L || currentRoomMax <= 0) return@on
-            if (DungeonUtils.secretCount + fakeSecrets >= currentRoomMax) completeRoom()
+            if ((DungeonUtils.secretCount - roomStartSecrets) + fakeSecrets >= currentRoomMax) completeRoom()
         }
 
         on<BlockInteractEvent> {
@@ -106,6 +108,7 @@ object BigTimer : Module(
         roomStartTime = 0L
         currentRoomName = ""
         currentRoomMax = 0
+        roomStartSecrets = 0
         roomCompleted = false
         fakeSecrets = 0
         fakePositions = mutableSetOf()

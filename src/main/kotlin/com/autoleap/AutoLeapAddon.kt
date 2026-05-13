@@ -15,7 +15,5 @@ object AutoLeapAddon : ClientModInitializer {
         }
 
         ModuleManager.registerModules(ModuleConfig("trji.json"), AutoLeap, BigTimer)
-
-        FontPackRegistrar.register()
     }
 }
