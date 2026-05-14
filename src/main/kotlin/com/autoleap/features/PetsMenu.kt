@@ -46,6 +46,8 @@ object PetsMenu : Module(
     private val DIM      = Color(0xAA, 0xAA, 0xBB, 1.0f)
     private val BORDER   = Color(0x33, 0x33, 0x50, 1.0f)
 
+    fun isActive() = capturedMenu != null && enabled
+
     private var capturedMenu: AbstractContainerMenu? = null
     private val cardBounds = mutableMapOf<Int, IntArray>()
     private var lastMx = 0
