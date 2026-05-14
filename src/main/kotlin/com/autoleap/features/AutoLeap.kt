@@ -127,6 +127,8 @@ object AutoLeap : Module(
             .first { Map::class.java.isAssignableFrom(it.type) }
             .also { it.isAccessible = true }
     }.getOrNull()
+    private val bossDeathDisabled = bossEventsField == null
+    private var bossDeathWarnSent = false
     private val prevBossProgress = mutableMapOf<UUID, Float>()
 
     @Suppress("UNCHECKED_CAST")
@@ -282,6 +284,13 @@ object AutoLeap : Module(
     // --- Boss death detection ---
 
     private fun checkBossDeaths() {
+        if (bossDeathDisabled) {
+            if (!bossDeathWarnSent) {
+                bossDeathWarnSent = true
+                modMessage("§c[AutoLeap] Boss death leaping is disabled — failed to access boss bar data. Please report this.")
+            }
+            return
+        }
         val events = runCatching { bossEvents() }.getOrNull() ?: return
         for ((id, event) in events) {
             val current = event.progress
