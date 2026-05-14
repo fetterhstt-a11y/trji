@@ -44,17 +44,21 @@ object BigTimer : Module(
     private var fakeSecrets = 0
     private var fakePositions = mutableSetOf<String>()
     private var lastInteractPos: Triple<Int, Int, Int>? = null
+    private val completedRooms = mutableSetOf<String>()
 
     init {
         loadData()
 
         on<WorldEvent.Load> {
             resetRoomState()
+            completedRooms.clear()
         }
 
         on<RoomEnterEvent> {
             val data = room?.data ?: return@on
             val name = data.name.takeIf { it.isNotBlank() } ?: return@on
+            // Don't restart if we're already timing this room or already completed it this run
+            if (name == currentRoomName || completedRooms.contains(name)) return@on
             val max = customSecrets[name] ?: data.secrets
             if (max <= 0) return@on
             resetRoomState()
@@ -66,7 +70,10 @@ object BigTimer : Module(
 
         on<TickEvent.Start> {
             if (!DungeonUtils.inDungeons || roomCompleted || roomStartTime == 0L || currentRoomMax <= 0) return@on
-            if ((DungeonUtils.secretCount - roomStartSecrets) + fakeSecrets >= currentRoomMax) completeRoom()
+            // Require at least 1s in room before allowing completion to filter out event noise
+            if (System.currentTimeMillis() - roomStartTime < 1000L) return@on
+            val secretDelta = maxOf(0, DungeonUtils.secretCount - roomStartSecrets)
+            if (secretDelta + fakeSecrets >= currentRoomMax) completeRoom()
         }
 
         on<BlockInteractEvent> {
@@ -82,6 +89,7 @@ object BigTimer : Module(
 
     private fun completeRoom() {
         roomCompleted = true
+        completedRooms.add(currentRoomName)
         val elapsed = System.currentTimeMillis() - roomStartTime
         val runType = if (PartyUtils.isInParty) "team" else "solo"
 

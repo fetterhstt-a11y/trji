@@ -12,6 +12,15 @@ val autoLeapCommand = Commodore("trji") {
         modMessage("§7Current section: §b${AutoLeap.currentSection}")
     }
 
+    literal("profile") {
+        literal("set") {
+            executable {
+                runs { section: String, cls: String -> AutoLeap.setSectionClass(section, cls) }
+            }
+        }
+        runs { AutoLeap.printCurrentProfile() }
+    }
+
     literal("bt") {
         literal("pbs").runs { BigTimer.printAllPBs() }
         literal("resetpbs").runs { BigTimer.resetAllPBs() }

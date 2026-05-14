@@ -1,6 +1,8 @@
 package com.autoleap.features
 
 import com.autoleap.events.InputEvent
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import com.odtheking.odin.clickgui.settings.impl.BooleanSetting
 import com.odtheking.odin.clickgui.settings.impl.NumberSetting
 import com.odtheking.odin.clickgui.settings.impl.SelectorSetting
@@ -14,9 +16,14 @@ import com.odtheking.odin.features.Module
 import com.odtheking.odin.utils.modMessage
 import com.odtheking.odin.utils.noControlCodes
 import com.odtheking.odin.utils.skyblock.dungeon.DungeonUtils
+import net.fabricmc.loader.api.FabricLoader
+import net.minecraft.client.gui.components.BossHealthOverlay
+import net.minecraft.client.gui.components.LerpingBossEvent
 import net.minecraft.world.InteractionHand
 import net.minecraft.world.inventory.ClickType
 import org.lwjgl.glfw.GLFW
+import java.io.File
+import java.util.UUID
 
 object AutoLeap : Module(
     name = "Auto Leap",
@@ -29,31 +36,28 @@ object AutoLeap : Module(
     private val p2AutoLeap by BooleanSetting("P2 Auto Leap", true, desc = "Automatically leap on P2 chat triggers.")
     private val p5AutoLeap by BooleanSetting("P5 Auto Leap", true, desc = "Automatically leap on P5 chat triggers.")
     private val pyAutoLeap by BooleanSetting("PY Auto Leap", true, desc = "Automatically leap on PY chat triggers.")
+    private val goldorAutoLeap by BooleanSetting("3x3 Auto Leap", true, desc = "Automatically leap on Goldor 3x3 chat trigger.")
     private val printDialogue by BooleanSetting("Print Dialogue", desc = "Sends a message when a dialogue trigger is registered.")
     private val debugMode by BooleanSetting("Debug Mode", desc = "Prints debug info to chat.")
 
-    private val classOptions = listOf("Unknown", "Healer", "Archer", "Mage", "Berserk", "Tank")
+    val classOptions = listOf("Unknown", "Healer", "Archer", "Mage", "Berserk", "Tank")
+    val profileNames = listOf("Tank", "Mage", "Archer", "Healer", "Berserker")
+    val sectionKeys = listOf("Clear", "EE1", "EE2", "EE2Fallback", "EE3", "EE3Fallback", "EE4", "Core", "3x3", "Mid", "P5", "P2", "PY")
 
-    private val clear by SelectorSetting("Clear", "Unknown", classOptions, desc = "Leap target during Clear.")
-    private val ee1 by SelectorSetting("EE1", "Unknown", classOptions, desc = "Leap target at EE1.")
-    private val ee2 by SelectorSetting("EE2", "Unknown", classOptions, desc = "Leap target at EE2.")
-    private val ee2Fallback by SelectorSetting("EE2 Fallback", "Unknown", classOptions, desc = "Fallback leap target at EE2 if primary is dead.")
-    private val ee3 by SelectorSetting("EE3", "Unknown", classOptions, desc = "Leap target at EE3.")
-    private val ee3Fallback by SelectorSetting("EE3 Fallback", "Unknown", classOptions, desc = "Fallback leap target at EE3 if primary is dead.")
-    private val ee4 by SelectorSetting("EE4", "Unknown", classOptions, desc = "Leap target at EE4.")
-    private val core by SelectorSetting("Core", "Unknown", classOptions, desc = "Leap target at Core.")
-    private val threeByThree by SelectorSetting("3x3", "Unknown", classOptions, desc = "Leap target at 3x3.")
-    private val mid by SelectorSetting("Mid", "Unknown", classOptions, desc = "Leap target at Mid.")
-    private val p5 by SelectorSetting("P5", "Unknown", classOptions, desc = "Leap target at P5.")
-    private val p2 by SelectorSetting("P2", "Unknown", classOptions, desc = "Leap target at P2.")
-    private val py by SelectorSetting("PY", "Unknown", classOptions, desc = "Leap target at PY.")
+    private val activeProfileSetting by SelectorSetting("Profile", "Tank", profileNames, desc = "Active leap profile. Use /trji profile set <section> <class> to configure.")
+
+    private val gson = Gson()
+    private val configDir get() = FabricLoader.getInstance().configDir.resolve("trji").toFile().also { it.mkdirs() }
+    private val profileFile get() = File(configDir, "autoleap_profiles.json")
+
+    // profileName -> sectionKey -> classIndex
+    private var profileData: MutableMap<String, MutableMap<String, Int>> = mutableMapOf()
 
     private var lastClick = 0L
     private var pyAutoLeaped = false
     var currentSection = "Unknown"
         private set
 
-    // --- Leap state machine ---
     private enum class LeapState { IDLE, SWAPPING, OPENING, CLICKING }
     private var leapState = LeapState.IDLE
     private var leapTargetName = ""
@@ -61,16 +65,29 @@ object AutoLeap : Module(
     private var leapDeadline = 0L
     private var leapClickTicks = 0
 
+    private val bossEventsField = BossHealthOverlay::class.java
+        .getDeclaredField("events")
+        .also { it.isAccessible = true }
+    private val prevBossProgress = mutableMapOf<UUID, Float>()
+
+    @Suppress("UNCHECKED_CAST")
+    private fun bossEvents(): Map<UUID, LerpingBossEvent> =
+        bossEventsField.get(mc.gui.bossOverlay) as Map<UUID, LerpingBossEvent>
+
     init {
+        loadProfiles()
+
         on<WorldEvent.Load> {
             pyAutoLeaped = false
             currentSection = "Unknown"
             leapState = LeapState.IDLE
+            prevBossProgress.clear()
         }
 
         on<TickEvent.Start> {
             if (DungeonUtils.inDungeons) updateCurrentSection()
             tickLeapStateMachine()
+            if (autoLeap) checkBossDeaths()
         }
 
         on<ScreenEvent.Open> {
@@ -81,39 +98,18 @@ object AutoLeap : Module(
         }
 
         on<ChatPacketEvent> {
-            if (!autoLeap) return@on
             val message = value.noControlCodes
             when {
-                p2AutoLeap && (message.contains("[BOSS] Maxor: I'M TOO YOUNG TO DIE AGAIN!") ||
-                message.contains("[BOSS] Maxor: I'LL MAKE YOU REMEMBER MY DEATH!!")) -> {
-                    if (printDialogue) modMessage("found dialogue: $message")
-                    handleLeap(completedSection = "P2")
-                }
-
-                pyAutoLeap && !pyAutoLeaped && (message.contains("[BOSS] Storm: Ouch, that hurt!") ||
+                // PY: Storm gets hit but doesn't die, so keep chat-based trigger
+                autoLeap && pyAutoLeap && !pyAutoLeaped && (message.contains("[BOSS] Storm: Ouch, that hurt!") ||
                 message.contains("[BOSS] Storm: Oof")) -> {
                     if (printDialogue) modMessage("found dialogue: $message")
                     pyAutoLeaped = true
                     handleLeap(completedSection = "PY")
                 }
 
-                message.contains("[BOSS] Storm: I should have known that I stood no chance.") -> {
-                    if (printDialogue) modMessage("found dialogue: $message")
-                    handleLeap(completedSection = "EE1")
-                }
-
-                message.contains("[BOSS] Goldor: YOU ARE FACE TO FACE WITH GOLDOR!") -> {
-                    if (printDialogue) modMessage("found dialogue: $message")
-                    handleLeap(completedSection = "3x3")
-                }
-
                 message.contains("You are on a leap cooldown!") -> {
                     leapState = LeapState.IDLE
-                }
-
-                p5AutoLeap && message.contains("[BOSS] Necron: All this, for nothing...") -> {
-                    if (printDialogue) modMessage("found dialogue: $message")
-                    handleLeap(completedSection = "P5")
                 }
             }
         }
@@ -147,13 +143,85 @@ object AutoLeap : Module(
         }
     }
 
+    // --- Profile API ---
+
+    private fun currentProfile(): MutableMap<String, Int> =
+        profileData.getOrPut(profileNames[activeProfileSetting]) { mutableMapOf() }
+
+    fun getSectionClass(section: String): String {
+        val idx = currentProfile()[section] ?: 0
+        return classOptions.getOrElse(idx) { "Unknown" }
+    }
+
+    fun setSectionClass(section: String, className: String) {
+        val key = sectionKeys.firstOrNull { it.equals(section, ignoreCase = true) }
+        if (key == null) {
+            modMessage("§c[AutoLeap] Unknown section: §b$section§c. Valid: ${sectionKeys.joinToString(", ")}")
+            return
+        }
+        val idx = classOptions.indexOfFirst { it.equals(className, ignoreCase = true) }
+        if (idx == -1) {
+            modMessage("§c[AutoLeap] Unknown class: §b$className§c. Valid: ${classOptions.drop(1).joinToString(", ")}")
+            return
+        }
+        currentProfile()[key] = idx
+        saveProfiles()
+        modMessage("§7[AutoLeap] §e${profileNames[activeProfileSetting]}§7: $key → §b${classOptions[idx]}")
+    }
+
+    fun printCurrentProfile() {
+        val name = profileNames[activeProfileSetting]
+        modMessage("§7[AutoLeap] §e$name §7profile:")
+        for (key in sectionKeys) {
+            val cls = getSectionClass(key)
+            modMessage("  §7${key.padEnd(12)} §b$cls")
+        }
+    }
+
+    private fun loadProfiles() = runCatching {
+        val f = profileFile
+        if (f.exists()) {
+            val type = object : TypeToken<MutableMap<String, MutableMap<String, Int>>>() {}.type
+            profileData = gson.fromJson(f.readText(), type) ?: mutableMapOf()
+        }
+    }
+
+    private fun saveProfiles() = runCatching { profileFile.writeText(gson.toJson(profileData)) }
+
+    // --- Boss death detection ---
+
+    private fun checkBossDeaths() {
+        val events = runCatching { bossEvents() }.getOrNull() ?: return
+        for ((id, event) in events) {
+            val current = event.progress
+            val prev = prevBossProgress[id]
+            if (prev != null && prev > 0f && current <= 0f) {
+                onBossDeath(event.name.string.noControlCodes)
+            }
+            prevBossProgress[id] = current
+        }
+        prevBossProgress.keys.retainAll(events.keys)
+    }
+
+    private fun onBossDeath(bossName: String) {
+        val section = when {
+            p2AutoLeap && bossName.contains("Maxor") -> "P2"
+            bossName.contains("Storm") -> "EE1"
+            goldorAutoLeap && bossName.contains("Goldor") -> "3x3"
+            p5AutoLeap && bossName.contains("Necron") -> "P5"
+            else -> return
+        }
+        if (printDialogue) modMessage("§7[AutoLeap] Boss died: $bossName → $section")
+        handleLeap(completedSection = section)
+    }
+
+    // --- Leap logic ---
+
     fun leapToClass(targetClass: String) {
         if (leapState != LeapState.IDLE) return
 
-        // Self dead check
         if (DungeonUtils.currentDungeonPlayer?.isDead ?: false) return
 
-        // Find target by class
         val target = DungeonUtils.dungeonTeammatesNoSelf.find {
             it.clazz.name.equals(targetClass, ignoreCase = true)
         }
@@ -168,7 +236,6 @@ object AutoLeap : Module(
 
         leapTargetName = target.name
 
-        // If already in leap menu: immediate middle click, no state machine needed
         if (isInLeapMenu()) {
             leapAlreadyOpen = true
             clickLeapTarget()
@@ -208,7 +275,6 @@ object AutoLeap : Module(
                 }
             }
             LeapState.OPENING -> {
-                // Primary detection via ScreenEvent.Open; this is the timeout fallback
                 if (now >= leapDeadline) {
                     modMessage("§c[AutoLeap] Spirit Leap menu did not open.")
                     leapState = LeapState.IDLE
@@ -285,7 +351,7 @@ object AutoLeap : Module(
 
         if (newSection != currentSection) {
             if (debugMode) modMessage("§7[AutoLeap] Section: $currentSection -> $newSection (${x.toInt()},${y.toInt()},${z.toInt()})")
-            }
+        }
         currentSection = newSection
     }
 
@@ -294,31 +360,15 @@ object AutoLeap : Module(
 
         val targetSection = if (!completedSection.isNullOrEmpty() && completedSection != "Unknown") completedSection else currentSection
 
-        val optionIndex = when (targetSection) {
-            "Clear" -> clear
-            "EE1"   -> ee1
-            "EE2"   -> ee2
-            "EE3"   -> ee3
-            "EE4"   -> ee4
-            "Core"  -> core
-            "3x3"   -> threeByThree
-            "Mid"   -> mid
-            "P5"    -> p5
-            "P2"    -> p2
-            "PY"    -> py
-            else    -> { if (!isAutoLeap) modMessage("§cAutoLeap: unknown section \"$targetSection\"."); return }
-        }
-
-        val primaryClass = classOptions.getOrElse(optionIndex) { "Unknown" }
-        if (debugMode) modMessage("§7[AutoLeap] Target: $primaryClass (section=$targetSection)")
+        val primaryClass = getSectionClass(targetSection)
+        if (debugMode) modMessage("§7[AutoLeap] Target: $primaryClass (section=$targetSection, profile=${profileNames[activeProfileSetting]})")
         if (primaryClass == "Unknown") return
 
         val targetClass = if (targetSection == "EE2" || targetSection == "EE3") {
             val primaryDead = DungeonUtils.dungeonTeammatesNoSelf
                 .find { it.clazz.name.equals(primaryClass, ignoreCase = true) }?.isDead ?: false
             if (primaryDead) {
-                val fallbackIndex = if (targetSection == "EE2") ee2Fallback else ee3Fallback
-                val fallbackClass = classOptions.getOrElse(fallbackIndex) { "Unknown" }
+                val fallbackClass = getSectionClass("${targetSection}Fallback")
                 if (debugMode) modMessage("§7[AutoLeap] Primary dead, fallback: $fallbackClass")
                 if (fallbackClass == "Unknown") return
                 fallbackClass
