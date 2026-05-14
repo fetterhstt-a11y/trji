@@ -14,10 +14,9 @@ import net.minecraft.client.gui.GuiGraphics
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen
 import net.minecraft.client.input.KeyEvent
 import net.minecraft.client.input.MouseButtonEvent
-import net.minecraft.client.renderer.texture.DynamicTexture
 import net.minecraft.core.component.DataComponents
 import net.minecraft.network.chat.Component
-import net.minecraft.resources.ResourceLocation
+import net.minecraft.resources.Identifier
 import net.minecraft.world.entity.player.Inventory
 import net.minecraft.world.inventory.AbstractContainerMenu
 import net.minecraft.world.inventory.ClickType
@@ -164,7 +163,7 @@ object PetsMenuV2 : Module(
                     cardBounds[slot.index] = intArrayOf(cx, cy, lay.cardW, lay.cardH)
                 }
 
-                if (hoveredStack != null) {
+                if (hoveredStack != null && !PetsMenuV2.onlyFavorites) {
                     ctx.setTooltipForNextFrame(mc.font, hoveredStack, mx.coerceIn(4, sw - 4), my.coerceIn(4, sh - 4))
                     ctx.renderDeferredElements()
                 }
@@ -203,53 +202,28 @@ object PetsMenuV2 : Module(
         }
 
         private fun renderIcon(ctx: GuiGraphics, stack: ItemStack, cx: Int, cy: Int, lay: Layout) {
+            val sz      = lay.iconSz
+            val scale   = sz / 16f
+            val centerX = (cx + lay.cardW / 2).toFloat()
+            val centerY = (cy + 6 + sz / 2).toFloat()
+
+            val petName   = extractPetName(stack.displayName.string.noControlCodes.trim())
+            val textureId = petName.lowercase().replace(" ", "_").replace(Regex("[^a-z0-9_]"), "")
+            val loc       = Identifier.parse("trji:textures/pets/$textureId.png")
+            val mc        = Minecraft.getInstance()
+
+            val useCustom = try { mc.resourceManager.getResource(loc).isPresent } catch (e: Exception) { false }
+
+            ctx.pose().pushMatrix()
+            ctx.pose().translate(centerX, centerY)
+            ctx.pose().scale(scale)
             try {
-                val sz      = lay.iconSz
-                val scale   = sz / 16f
-                val centerX = (cx + lay.cardW / 2).toFloat()
-                val centerY = (cy + 6 + sz / 2).toFloat()
-                
-                // Try to load custom pet texture
-                val petName = extractPetName(stack.displayName.string.noControlCodes.trim())
-                val textureId = petName
-                    .lowercase()
-                    .replace(" ", "_")
-                    .replace(Regex("[^a-z0-9_]"), "")
-                
-                val resourceLocation = ResourceLocation.parse("trji:textures/pets/$textureId.png")
-                val mc = Minecraft.getInstance()
-                
-                try {
-                    // Try to load and render the custom texture
-                    mc.textureManager.bindForSetup(resourceLocation)
-                    ctx.pose().pushMatrix()
-                    ctx.pose().translate(centerX, centerY)
-                    ctx.pose().scale(scale)
-                    ctx.blit(resourceLocation, -8, -8, 0.0f, 0.0f, 16, 16, 16, 16)
-                    ctx.pose().popMatrix()
-                    return
-                } catch (e: Exception) {
-                    // Texture doesn't exist or can't load, fall back to vanilla item
-                }
+                if (useCustom) ctx.blit(loc, -8, -8, 8, 8, 0.0f, 1.0f, 0.0f, 1.0f)
+                else           ctx.renderItem(stack, -8, -8)
             } catch (e: Exception) {
-                // Any error, fall back to vanilla item rendering
-            }
-            
-            // Fallback: render vanilla item icon
-            try {
-                val sz      = lay.iconSz
-                val scale   = sz / 16f
-                val centerX = (cx + lay.cardW / 2).toFloat()
-                val centerY = (cy + 6 + sz / 2).toFloat()
-                
-                ctx.pose().pushMatrix()
-                ctx.pose().translate(centerX, centerY)
-                ctx.pose().scale(scale)
                 ctx.renderItem(stack, -8, -8)
-                ctx.pose().popMatrix()
-            } catch (e: Exception) {
-                // Silently fail
             }
+            ctx.pose().popMatrix()
         }
 
         private fun drawCardText(
@@ -326,12 +300,11 @@ object PetsMenuV2 : Module(
         // ── Helpers ──────────────────────────────────────────────────────────
 
         private fun extractPetName(displayName: String): String {
-            // Remove leading stars (⭐), level info, etc.
-            // Format is typically: "⭐⭐ Pet Name - Level 100" or similar
             return displayName
-                .replace(Regex("^[⭐\\s]*"), "")  // Remove leading stars and spaces
-                .replace(Regex("\\s*-\\s*Level\\s+\\d+.*$"), "")  // Remove " - Level N" and anything after
-                .replace(Regex("\\s*\\(.*\\)\\s*$"), "")  // Remove any trailing parenthetical
+                .replace(Regex("^[⭐\\s]+"), "")                    // leading stars/spaces
+                .replace(Regex("\\[Lvl\\s+[\\w]+]\\s*"), "")       // [Lvl 100] or [Lvl MAX]
+                .replace(Regex("\\s*-\\s*Level\\s+\\d+.*$"), "")   // trailing " - Level N"
+                .replace(Regex("\\s*\\(.*\\)\\s*$"), "")           // trailing parenthetical
                 .trim()
         }
 
