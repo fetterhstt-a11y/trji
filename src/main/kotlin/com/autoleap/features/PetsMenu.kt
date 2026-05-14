@@ -7,6 +7,7 @@ import com.odtheking.odin.events.core.on
 import com.odtheking.odin.features.Category
 import com.odtheking.odin.features.Module
 import com.odtheking.odin.utils.Color
+import com.odtheking.odin.utils.modMessage
 import com.odtheking.odin.utils.noControlCodes
 import com.odtheking.odin.utils.render.DrawContextRenderer
 import com.odtheking.odin.utils.render.getStringWidth
@@ -23,6 +24,7 @@ object PetsMenu : Module(
     category = Category.DUNGEON
 ) {
     private val onlyFavorites by BooleanSetting("Only Favorites", false, desc = "Only show pets marked as favorites (⭐).")
+    private val debugTitles by BooleanSetting("Debug Titles", false, desc = "Print screen title to chat whenever a container opens. Use this to find the pets menu title.")
 
     private const val COLS   = 4
     private const val CARD_W = 70
@@ -47,7 +49,10 @@ object PetsMenu : Module(
 
     init {
         on<ScreenEvent.Open> {
-            active = screen.title.string.noControlCodes.trim() == "Pets"
+            val raw = screen.title.string
+            val clean = raw.noControlCodes.trim()
+            if (debugTitles) modMessage("§7[PetsMenu] screen: \"$clean\" (raw: \"$raw\")")
+            active = clean == "Pets"
             cardBounds.clear()
         }
 
