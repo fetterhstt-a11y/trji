@@ -34,11 +34,12 @@ object AutoLeap : Module(
     private val fastLeap by BooleanSetting("Fast Leap", desc = "Leaps to a configured class on InfiniLeap left click.")
     private val fastDelay by NumberSetting("Fast Leap Delay", 250.0f, 100.0, 500.0, 50.0, desc = "Minimum ms between fast leaps.")
     private val autoLeap by BooleanSetting("Auto Leap", desc = "Automatically leaps on boss death triggers.")
-    private val p2AutoLeap by BooleanSetting("P2 Auto Leap", true, desc = "Automatically leap when Maxor dies.")
-    private val p5AutoLeap by BooleanSetting("P5 Auto Leap", true, desc = "Automatically leap when Necron dies.")
-    private val pyAutoLeap by BooleanSetting("PY Auto Leap", true, desc = "Automatically leap on PY chat triggers.")
-    private val goldorAutoLeap by BooleanSetting("3x3 Auto Leap", true, desc = "Automatically leap when Goldor dies.")
-    private val leapMessage by StringSetting("Leap Message", "§aLeaping to §b{player}§a!", desc = "Message shown when leaping. Use {player} for the target's name.")
+    private val p2AutoSetting   = BooleanSetting("P2 Auto Leap",  true, desc = "Automatically leap when Maxor dies.")
+    private val p5AutoSetting   = BooleanSetting("P5 Auto Leap",  true, desc = "Automatically leap when Necron dies.")
+    private val pyAutoSetting   = BooleanSetting("PY Auto Leap",  true, desc = "Automatically leap on PY chat triggers.")
+    private val g3x3AutoSetting = BooleanSetting("3x3 Auto Leap", true, desc = "Automatically leap when Goldor dies.")
+    private val sendLeapMessage by BooleanSetting("Leap Message", true, desc = "Send a message to party chat when leaping.")
+    private val leapMessage by StringSetting("Leap Message Text", "[TRJI] §aLeaping to §b{player}§a!", desc = "Message sent to party chat when leaping. Use {player} for the target's name.")
     private val printDialogue by BooleanSetting("Print Dialogue", desc = "Sends a message when a trigger fires.")
     private val debugMode by BooleanSetting("Debug Mode", desc = "Prints debug info to chat.")
 
@@ -47,6 +48,10 @@ object AutoLeap : Module(
     val sectionKeys  = listOf("Clear", "EE1", "EE2", "EE2Fallback", "EE3", "EE3Fallback", "EE4", "Core", "3x3", "Mid", "P5", "P2", "PY")
 
     private val activeProfileSetting by SelectorSetting("Profile", "Tank", profileNames, desc = "Active leap profile.")
+    private var p2AutoLeap     by p2AutoSetting
+    private var p5AutoLeap     by p5AutoSetting
+    private var pyAutoLeap     by pyAutoSetting
+    private var goldorAutoLeap by g3x3AutoSetting
 
     // --- Section settings (GUI-visible, profile-synced) ---
     private val clearSetting        = SelectorSetting("Clear",        "Unknown", classOptions, desc = "Leap target during Clear.")
@@ -92,6 +97,13 @@ object AutoLeap : Module(
         "P5"          to p5Setting,
         "P2"          to p2Setting,
         "PY"          to pySetting
+    )
+
+    private val boolAccessors: Map<String, Pair<() -> Boolean, (Boolean) -> Unit>> = linkedMapOf(
+        "autoP2"  to Pair({ p2AutoLeap },     { v -> p2AutoLeap     = v }),
+        "autoP5"  to Pair({ p5AutoLeap },     { v -> p5AutoLeap     = v }),
+        "autoPY"  to Pair({ pyAutoLeap },     { v -> pyAutoLeap     = v }),
+        "auto3x3" to Pair({ goldorAutoLeap }, { v -> goldorAutoLeap = v })
     )
 
     // Reflection to read/write SelectorSetting.index (mutable private int field)
@@ -201,6 +213,9 @@ object AutoLeap : Module(
                 for ((key, setting) in sectionSettings) {
                     setIndex(setting, profile[key] ?: 0)
                 }
+                for ((key, accessor) in boolAccessors) {
+                    accessor.second((profile[key] ?: 1) != 0)
+                }
             }
         } else {
             val name = profileNames[current]
@@ -210,6 +225,13 @@ object AutoLeap : Module(
                 val idx = getIndex(setting)
                 if (profile[key] != idx) {
                     profile[key] = idx
+                    changed = true
+                }
+            }
+            for ((key, accessor) in boolAccessors) {
+                val v = if (accessor.first()) 1 else 0
+                if (profile[key] != v) {
+                    profile[key] = v
                     changed = true
                 }
             }
@@ -250,15 +272,21 @@ object AutoLeap : Module(
 
     // classOptions indices: 0=Unknown, 1=Healer, 2=Archer, 3=Mage, 4=Berserk, 5=Tank
     private val defaultProfiles: Map<String, Map<String, Int>> by lazy {
-        val disabled = setOf<String>() // placeholder — overridden per profile
-        fun profile(ownIdx: Int, removed: Set<String>) =
+        fun sectionProfile(ownIdx: Int, removed: Set<String>) =
             sectionKeys.associateWith { if (it in removed) 0 else ownIdx }
+        val autoBools = mapOf(
+            "Tank"      to mapOf("autoP2" to 1, "autoP5" to 1, "autoPY" to 1, "auto3x3" to 1),
+            "Mage"      to mapOf("autoP2" to 0, "autoP5" to 1, "autoPY" to 0, "auto3x3" to 1),
+            "Archer"    to mapOf("autoP2" to 0, "autoP5" to 1, "autoPY" to 0, "auto3x3" to 1),
+            "Healer"    to mapOf("autoP2" to 0, "autoP5" to 0, "autoPY" to 0, "auto3x3" to 1),
+            "Berserker" to mapOf("autoP2" to 0, "autoP5" to 1, "autoPY" to 0, "auto3x3" to 1)
+        )
         mapOf(
-            "Tank"      to profile(5, emptySet()),
-            "Mage"      to profile(3, setOf("Core", "EE4", "P2", "PY")),
-            "Archer"    to profile(2, setOf("P2", "PY")),
-            "Healer"    to profile(1, setOf("EE1", "P2", "PY", "P5")),
-            "Berserker" to profile(4, setOf("EE1", "P2", "PY"))
+            "Tank"      to (sectionProfile(5, emptySet())                       + autoBools["Tank"]!!),
+            "Mage"      to (sectionProfile(3, setOf("Core", "EE4", "P2", "PY")) + autoBools["Mage"]!!),
+            "Archer"    to (sectionProfile(2, setOf("P2", "PY"))                + autoBools["Archer"]!!),
+            "Healer"    to (sectionProfile(1, setOf("EE1", "P2", "PY", "P5"))   + autoBools["Healer"]!!),
+            "Berserker" to (sectionProfile(4, setOf("EE1", "P2", "PY"))         + autoBools["Berserker"]!!)
         )
     }
 
@@ -268,12 +296,15 @@ object AutoLeap : Module(
             val type = object : TypeToken<MutableMap<String, MutableMap<String, Int>>>() {}.type
             profileData = gson.fromJson(f.readText(), type) ?: mutableMapOf()
         }
-        // Populate any profile not yet saved with its defaults.
+        // Populate missing profiles and backfill any missing keys in existing ones.
         var changed = false
         for ((name, defaults) in defaultProfiles) {
-            if (!profileData.containsKey(name)) {
-                profileData[name] = defaults.toMutableMap()
-                changed = true
+            val profile = profileData.getOrPut(name) { mutableMapOf() }
+            for ((key, value) in defaults) {
+                if (!profile.containsKey(key)) {
+                    profile[key] = value
+                    changed = true
+                }
             }
         }
         if (changed) saveProfiles()
@@ -395,7 +426,11 @@ object AutoLeap : Module(
             player.closeContainer()
             return
         }
-        modMessage(leapMessage.replace("{player}", leapTargetName))
+        if (sendLeapMessage) {
+            val msg = leapMessage.replace("{player}", leapTargetName)
+            mc.player?.connection?.sendCommand("pc $msg")
+            modMessage(msg)
+        }
         val button = if (leapAlreadyOpen) 2 else 0
         val clickType = if (leapAlreadyOpen) ClickType.CLONE else ClickType.PICKUP
         mc.gameMode?.handleInventoryMouseClick(container.containerId, slot.index, button, clickType, player)

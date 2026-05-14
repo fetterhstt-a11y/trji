@@ -39,6 +39,11 @@ val autoLeapCommand = Commodore("trji") {
         }
 
         executable {
+            param("roomName") {
+                suggests {
+                    (BigTimer.pbData.values.flatMap { it.keys } + BigTimer.customSecrets.keys).distinct()
+                }
+            }
             runs { roomName: String, count: Int -> BigTimer.setCustomSecrets(roomName, count) }
         }
     }

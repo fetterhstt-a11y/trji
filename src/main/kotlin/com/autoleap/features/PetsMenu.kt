@@ -1,7 +1,6 @@
 package com.autoleap.features
 
 import com.odtheking.odin.clickgui.settings.impl.BooleanSetting
-import com.odtheking.odin.events.GuiEvent
 import com.odtheking.odin.events.ScreenEvent
 import com.odtheking.odin.events.core.on
 import com.odtheking.odin.features.Category
@@ -13,9 +12,14 @@ import com.odtheking.odin.utils.render.DrawContextRenderer
 import com.odtheking.odin.utils.render.getStringWidth
 import com.odtheking.odin.utils.render.roundedFill
 import com.odtheking.odin.utils.render.text
-import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen
+import net.minecraft.client.gui.GuiGraphics
+import net.minecraft.client.gui.screens.Screen
 import net.minecraft.core.component.DataComponents
+import net.minecraft.network.chat.Component
+import net.minecraft.network.protocol.game.ServerboundContainerClosePacket
+import net.minecraft.world.inventory.AbstractContainerMenu
 import net.minecraft.world.inventory.ClickType
+import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.component.ItemLore
 
 object PetsMenu : Module(
@@ -24,7 +28,7 @@ object PetsMenu : Module(
     category = Category.DUNGEON
 ) {
     private val onlyFavorites by BooleanSetting("Only Favorites", false, desc = "Only show pets marked as favorites (⭐).")
-    private val debugTitles by BooleanSetting("Debug Titles", false, desc = "Print screen title to chat whenever a container opens. Use this to find the pets menu title.")
+    private val debugTitles by BooleanSetting("Debug Titles", false, desc = "Print screen title to chat whenever a container opens.")
 
     private const val COLS   = 4
     private const val CARD_W = 70
@@ -41,72 +45,80 @@ object PetsMenu : Module(
     private val DIM      = Color(0xAA, 0xAA, 0xBB, 1.0f)
     private val BORDER   = Color(0x33, 0x33, 0x50, 1.0f)
 
-    private var active = false
+    private var capturedMenu: AbstractContainerMenu? = null
+    private val cardBounds = mutableMapOf<Int, IntArray>()
     private var lastMx = 0
     private var lastMy = 0
-    // slot.index -> [cardX, cardY, w, h]
-    private val cardBounds = mutableMapOf<Int, IntArray>()
 
     init {
         on<ScreenEvent.Open> {
             val raw = screen.title.string
             val clean = raw.noControlCodes.trim()
             if (debugTitles) modMessage("§7[PetsMenu] screen: \"$clean\" (raw: \"$raw\")")
-            active = clean == "Pets"
+            if (!clean.startsWith("Pets")) return@on
+            val menu = (screen as? net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<*>)?.menu
+                ?: return@on
+            capturedMenu = menu
             cardBounds.clear()
+            mc.execute { if (enabled && mc.screen !is PetsScreen) mc.setScreen(PetsScreen) }
         }
 
-        on<ScreenEvent.Close> {
-            active = false
-            cardBounds.clear()
-        }
-
-        // GuiEvent.Render fires at HEAD of AbstractContainerScreen.render — cancel it,
-        // draw our custom UI, then call screen.renderTooltip for the hovered card.
-        on<GuiEvent.Render> {
-            if (!active) return@on
-            val s = screen as? AbstractContainerScreen<*> ?: return@on
-            cancel()
-            lastMx = mouseX
-            lastMy = mouseY
-            draw(guiGraphics, s, mouseX, mouseY)
-        }
-
-        // Cancel vanilla click; map to the card the cursor is over.
         on<ScreenEvent.MouseClick> {
-            if (!active) return@on
+            if (mc.screen !is PetsScreen) return@on
             cancel()
             val entry = cardBounds.entries.firstOrNull { (_, b) ->
                 lastMx in b[0] until b[0] + b[2] && lastMy in b[1] until b[1] + b[3]
             } ?: return@on
-            val s = screen as? AbstractContainerScreen<*> ?: return@on
-            mc.gameMode?.handleInventoryMouseClick(s.menu.containerId, entry.key, 0, ClickType.PICKUP, mc.player ?: return@on)
+            val menu = capturedMenu ?: return@on
+            mc.gameMode?.handleInventoryMouseClick(
+                menu.containerId, entry.key, 0, ClickType.PICKUP, mc.player ?: return@on
+            )
         }
     }
 
-    private fun draw(ctx: net.minecraft.client.gui.GuiGraphics, screen: AbstractContainerScreen<*>, mx: Int, my: Int) {
-        val menuSlots = screen.menu.slots.size - 36
-        val pets = screen.menu.slots
+    object PetsScreen : Screen(Component.literal("Pets")) {
+        override fun render(ctx: GuiGraphics, mx: Int, my: Int, delta: Float) {
+            val menu = capturedMenu ?: return
+            lastMx = mx
+            lastMy = my
+            draw(ctx, menu, mx, my, width, height)
+        }
+
+        override fun onClose() {
+            capturedMenu?.let { menu ->
+                mc.player?.connection?.send(ServerboundContainerClosePacket(menu.containerId))
+            }
+            capturedMenu = null
+            cardBounds.clear()
+            super.onClose()
+        }
+
+        override fun isPauseScreen() = false
+    }
+
+    private fun draw(ctx: GuiGraphics, menu: AbstractContainerMenu, mx: Int, my: Int, sw: Int, sh: Int) {
+        val menuSlots = menu.slots.size - 36
+        val pets = menu.slots
             .take(menuSlots)
-            .filter { !it.item.isEmpty && (!onlyFavorites || it.item.displayName.string.contains("⭐")) }
+            .filter { slot ->
+                !slot.item.isEmpty &&
+                petLevel(slot.item) != null &&
+                (!onlyFavorites || slot.item.displayName.string.contains("⭐"))
+            }
 
         val rows   = maxOf(1, (pets.size + COLS - 1) / COLS)
         val panelW = COLS * CARD_W + (COLS - 1) * GAP + PAD * 2
         val panelH = rows * CARD_H + (rows - 1) * GAP + PAD * 2 + HDR
-
-        val sw = mc.window.guiScaledWidth
-        val sh = mc.window.guiScaledHeight
         val px = (sw - panelW) / 2
         val py = (sh - panelH) / 2
 
-        ctx.fill(0, 0, sw, sh, 0x88000000.toInt())
         DrawContextRenderer.roundedFill(ctx, px, py, panelW, panelH, BG.rgba, 8f, BORDER.rgba, 1f)
 
-        ctx.text(screen.title.string.noControlCodes, px + PAD, py + 7, WHITE, true)
+        ctx.text("Pets", px + PAD, py + 7, WHITE, true)
         ctx.roundedFill(px + PAD, py + HDR - 4, panelW - PAD * 2, 2, ACCENT.rgba, 1)
 
         cardBounds.clear()
-        var hoveredItem: net.minecraft.world.item.ItemStack? = null
+        var hoveredItem: ItemStack? = null
 
         pets.forEachIndexed { i, slot ->
             val col = i % COLS
@@ -134,21 +146,20 @@ object PetsMenu : Module(
             cardBounds[slot.index] = intArrayOf(cx, cy, CARD_W, CARD_H)
         }
 
-        // Queue vanilla item tooltip then flush it — avoids any MC field name reflection.
         if (hoveredItem != null) {
             ctx.setTooltipForNextFrame(mc.font, hoveredItem, mx, my)
             ctx.renderDeferredElements()
         }
     }
 
-    private fun petLevel(stack: net.minecraft.world.item.ItemStack): String? {
+    private fun petLevel(stack: ItemStack): String? {
         val lore = stack.getOrDefault(DataComponents.LORE, ItemLore.EMPTY)
         return lore.lines().firstOrNull {
             it.string.noControlCodes.contains("Level", ignoreCase = true)
         }?.string?.noControlCodes?.trim()
     }
 
-    private fun rarityColor(stack: net.minecraft.world.item.ItemStack): Color {
+    private fun rarityColor(stack: ItemStack): Color {
         val lore = stack.getOrDefault(DataComponents.LORE, ItemLore.EMPTY)
         val last = lore.lines().lastOrNull { it.string.isNotBlank() }
             ?.string?.noControlCodes?.uppercase() ?: ""
