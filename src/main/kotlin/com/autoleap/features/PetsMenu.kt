@@ -1,6 +1,6 @@
 package com.autoleap.features
 
-import com.autoleap.mixin.PetsMenuState
+import com.autoleap.PetsMenuState
 import com.odtheking.odin.clickgui.settings.impl.BooleanSetting
 import com.odtheking.odin.events.ScreenEvent
 import com.odtheking.odin.events.core.on

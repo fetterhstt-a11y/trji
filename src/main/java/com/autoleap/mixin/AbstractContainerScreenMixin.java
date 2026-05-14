@@ -1,5 +1,6 @@
 package com.autoleap.mixin;
 
+import com.autoleap.PetsMenuState;
 import com.autoleap.features.PetsMenu;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;

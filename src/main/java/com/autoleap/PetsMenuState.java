@@ -1,4 +1,4 @@
-package com.autoleap.mixin;
+package com.autoleap;
 
 public class PetsMenuState {
     public static volatile boolean active = false;
