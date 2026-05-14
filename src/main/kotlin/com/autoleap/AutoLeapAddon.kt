@@ -3,6 +3,7 @@ package com.autoleap
 import com.autoleap.commands.autoLeapCommand
 import com.autoleap.features.AutoLeap
 import com.autoleap.features.BigTimer
+import com.autoleap.features.PetsMenu
 import com.odtheking.odin.config.ModuleConfig
 import com.odtheking.odin.features.ModuleManager
 import net.fabricmc.api.ClientModInitializer
@@ -14,6 +15,6 @@ object AutoLeapAddon : ClientModInitializer {
             autoLeapCommand.register(dispatcher)
         }
 
-        ModuleManager.registerModules(ModuleConfig("trji.json"), AutoLeap, BigTimer)
+        ModuleManager.registerModules(ModuleConfig("trji.json"), AutoLeap, BigTimer, PetsMenu)
     }
 }
