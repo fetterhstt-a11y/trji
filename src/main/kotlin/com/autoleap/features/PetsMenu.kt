@@ -15,7 +15,6 @@ import com.odtheking.odin.utils.render.text
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen
 import net.minecraft.core.component.DataComponents
 import net.minecraft.world.inventory.ClickType
-import net.minecraft.world.inventory.Slot
 import net.minecraft.world.item.component.ItemLore
 
 object PetsMenu : Module(
@@ -39,14 +38,6 @@ object PetsMenu : Module(
     private val WHITE    = Color(0xFF, 0xFF, 0xFF, 1.0f)
     private val DIM      = Color(0xAA, 0xAA, 0xBB, 1.0f)
     private val BORDER   = Color(0x33, 0x33, 0x50, 1.0f)
-
-    private val hoveredSlotField = AbstractContainerScreen::class.java
-        .getDeclaredField("hoveredSlot")
-        .also { it.isAccessible = true }
-
-    private val renderTooltipMethod = AbstractContainerScreen::class.java
-        .getDeclaredMethod("renderTooltip", net.minecraft.client.gui.GuiGraphics::class.java, Int::class.java, Int::class.java)
-        .also { it.isAccessible = true }
 
     private var active = false
     private var lastMx = 0
@@ -110,7 +101,7 @@ object PetsMenu : Module(
         ctx.roundedFill(px + PAD, py + HDR - 4, panelW - PAD * 2, 2, ACCENT.rgba, 1)
 
         cardBounds.clear()
-        var hoveredSlot: Slot? = null
+        var hoveredItem: net.minecraft.world.item.ItemStack? = null
 
         pets.forEachIndexed { i, slot ->
             val col = i % COLS
@@ -118,7 +109,7 @@ object PetsMenu : Module(
             val cx  = px + PAD + col * (CARD_W + GAP)
             val cy  = py + PAD + HDR + row * (CARD_H + GAP)
             val hovered = mx in cx until cx + CARD_W && my in cy until cy + CARD_H
-            if (hovered) hoveredSlot = slot
+            if (hovered) hoveredItem = slot.item
 
             DrawContextRenderer.roundedFill(ctx, cx, cy, CARD_W, CARD_H,
                 if (hovered) CARD_HOV.rgba else CARD_NRM.rgba, 6f, BORDER.rgba, 1f)
@@ -138,11 +129,10 @@ object PetsMenu : Module(
             cardBounds[slot.index] = intArrayOf(cx, cy, CARD_W, CARD_H)
         }
 
-        // Point hoveredSlot at the card under the cursor so renderTooltip shows the right item.
-        if (hoveredSlot != null) {
-            runCatching { hoveredSlotField.set(screen, hoveredSlot) }
-            runCatching { renderTooltipMethod.invoke(screen, ctx, mx, my) }
-            runCatching { hoveredSlotField.set(screen, null) }
+        // Queue vanilla item tooltip then flush it — avoids any MC field name reflection.
+        if (hoveredItem != null) {
+            ctx.setTooltipForNextFrame(mc.font, hoveredItem, mx, my)
+            ctx.renderDeferredElements()
         }
     }
 

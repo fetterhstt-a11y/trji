@@ -122,14 +122,16 @@ object AutoLeap : Module(
     private var leapDeadline = 0L
     private var leapClickTicks = 0
 
-    private val bossEventsField = BossHealthOverlay::class.java.declaredFields
-        .first { Map::class.java.isAssignableFrom(it.type) }
-        .also { it.isAccessible = true }
+    private val bossEventsField = runCatching {
+        BossHealthOverlay::class.java.declaredFields
+            .first { Map::class.java.isAssignableFrom(it.type) }
+            .also { it.isAccessible = true }
+    }.getOrNull()
     private val prevBossProgress = mutableMapOf<UUID, Float>()
 
     @Suppress("UNCHECKED_CAST")
-    private fun bossEvents(): Map<UUID, LerpingBossEvent> =
-        bossEventsField.get(mc.gui.bossOverlay) as Map<UUID, LerpingBossEvent>
+    private fun bossEvents(): Map<UUID, LerpingBossEvent>? =
+        bossEventsField?.get(mc.gui.bossOverlay) as? Map<UUID, LerpingBossEvent>
 
     init {
         loadProfiles()
