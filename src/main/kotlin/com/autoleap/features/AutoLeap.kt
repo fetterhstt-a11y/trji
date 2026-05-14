@@ -244,12 +244,35 @@ object AutoLeap : Module(
         }
     }
 
+    // classOptions indices: 0=Unknown, 1=Healer, 2=Archer, 3=Mage, 4=Berserk, 5=Tank
+    private val defaultProfiles: Map<String, Map<String, Int>> by lazy {
+        val disabled = setOf<String>() // placeholder — overridden per profile
+        fun profile(ownIdx: Int, removed: Set<String>) =
+            sectionKeys.associateWith { if (it in removed) 0 else ownIdx }
+        mapOf(
+            "Tank"      to profile(5, emptySet()),
+            "Mage"      to profile(3, setOf("Core", "EE4", "P2", "PY")),
+            "Archer"    to profile(2, setOf("P2", "PY")),
+            "Healer"    to profile(1, setOf("EE1", "P2", "PY", "P5")),
+            "Berserker" to profile(4, setOf("EE1", "P2", "PY"))
+        )
+    }
+
     private fun loadProfiles() = runCatching {
         val f = profileFile
         if (f.exists()) {
             val type = object : TypeToken<MutableMap<String, MutableMap<String, Int>>>() {}.type
             profileData = gson.fromJson(f.readText(), type) ?: mutableMapOf()
         }
+        // Populate any profile not yet saved with its defaults.
+        var changed = false
+        for ((name, defaults) in defaultProfiles) {
+            if (!profileData.containsKey(name)) {
+                profileData[name] = defaults.toMutableMap()
+                changed = true
+            }
+        }
+        if (changed) saveProfiles()
     }
 
     private fun saveProfiles() = runCatching { profileFile.writeText(gson.toJson(profileData)) }
