@@ -1,6 +1,5 @@
 package com.autoleap.features
 
-import com.autoleap.PetsMenuState
 import com.odtheking.odin.clickgui.settings.impl.BooleanSetting
 import com.odtheking.odin.events.ScreenEvent
 import com.odtheking.odin.events.core.on
@@ -58,34 +57,36 @@ object PetsMenu : Module(
             val menu = (screen as? AbstractContainerScreen<*>)?.menu ?: return@on
             capturedMenu = menu
             cardBounds.clear()
-            PetsMenuState.active = enabled
         }
 
         on<ScreenEvent.Close> {
             val clean = screen.title.string.noControlCodes.trim()
             if (!clean.startsWith("Pets")) return@on
             if (screen !is AbstractContainerScreen<*>) return@on
-            PetsMenuState.active = false
             capturedMenu = null
             cardBounds.clear()
         }
 
         on<ScreenEvent.MouseClick> {
-            if (!PetsMenuState.active) return@on
+            if (!enabled) return@on
+            val s = mc.screen as? AbstractContainerScreen<*> ?: return@on
+            val clean = s.title.string.noControlCodes.trim()
+            if (!clean.startsWith("Pets")) return@on
             cancel()
             val entry = cardBounds.entries.firstOrNull { (_, b) ->
                 lastMx in b[0] until b[0] + b[2] && lastMy in b[1] until b[1] + b[3]
             } ?: return@on
-            val menu = capturedMenu ?: return@on
             mc.gameMode?.handleInventoryMouseClick(
-                menu.containerId, entry.key, 0, ClickType.PICKUP, mc.player ?: return@on
+                s.menu.containerId, entry.key, 0, ClickType.PICKUP, mc.player ?: return@on
             )
         }
     }
 
+    fun isActive() = enabled
+
     // Called directly from AbstractContainerScreenMixin — replaces the vanilla render
-    fun drawOverlay(ctx: GuiGraphics, mx: Int, my: Int) {
-        val menu = capturedMenu ?: return
+    fun drawOverlay(ctx: GuiGraphics, mx: Int, my: Int, menu: AbstractContainerMenu) {
+        capturedMenu = menu
         lastMx = mx
         lastMy = my
         draw(ctx, menu, mx, my, mc.window.guiScaledWidth, mc.window.guiScaledHeight)
