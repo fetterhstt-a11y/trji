@@ -1,7 +1,6 @@
 package com.autoleap.features
 
 import com.odtheking.odin.clickgui.settings.impl.BooleanSetting
-import com.odtheking.odin.events.GuiEvent
 import com.odtheking.odin.events.ScreenEvent
 import com.odtheking.odin.events.core.on
 import com.odtheking.odin.features.Category
@@ -11,7 +10,6 @@ import com.odtheking.odin.utils.noControlCodes
 import com.odtheking.odin.utils.render.DrawContextRenderer
 import com.odtheking.odin.utils.render.getStringWidth
 import com.odtheking.odin.utils.render.roundedFill
-import com.odtheking.odin.utils.render.roundedOutline
 import com.odtheking.odin.utils.render.text
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen
 import net.minecraft.core.component.DataComponents
@@ -22,7 +20,7 @@ object PetsMenu : Module(
     description = "Replaces the Hypixel pets menu with a modern UI.",
     category = Category.DUNGEON
 ) {
-    private val cancelTooltip by BooleanSetting("Cancel Tooltip", true, desc = "Hides the vanilla item tooltip in the pets menu.")
+    private val onlyFavorites by BooleanSetting("Only Favorites", false, desc = "Only show pets marked as favorites (⭐).")
 
     private const val COLS     = 4
     private const val CARD_W   = 70
@@ -56,17 +54,6 @@ object PetsMenu : Module(
             drawOverlay(guiGraphics, s, mouseX, mouseY)
         }
 
-        on<GuiEvent.RenderSlot> {
-            if (!active) return@on
-            val s = screen as? AbstractContainerScreen<*> ?: return@on
-            val menuSlotCount = s.menu.slots.size - 36
-            if (slot.index < menuSlotCount) cancel()
-        }
-
-        on<GuiEvent.DrawTooltip> {
-            if (!active || !cancelTooltip) return@on
-            cancel()
-        }
     }
 
     private fun isPets(screen: net.minecraft.client.gui.screens.Screen): Boolean {
@@ -83,7 +70,7 @@ object PetsMenu : Module(
         val menuSlotCount = screen.menu.slots.size - 36
         val petSlots = screen.menu.slots
             .take(menuSlotCount)
-            .filter { !it.item.isEmpty }
+            .filter { !it.item.isEmpty && (!onlyFavorites || isFavorite(it.item)) }
 
         val rows   = maxOf(1, (petSlots.size + COLS - 1) / COLS)
         val panelW = COLS * CARD_W + (COLS - 1) * GAP + PAD * 2
@@ -140,6 +127,11 @@ object PetsMenu : Module(
             val rarity = rarityColor(slot.item)
             ctx.roundedFill(cx + 6, cy + CARD_H - 8, CARD_W - 12, 4, rarity.rgba, 2)
         }
+    }
+
+    private fun isFavorite(stack: net.minecraft.world.item.ItemStack): Boolean {
+        // Hypixel marks favorite pets with a ⭐ in the display name
+        return stack.displayName.string.contains("⭐")
     }
 
     private fun petLevel(stack: net.minecraft.world.item.ItemStack): String? {
