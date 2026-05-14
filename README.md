@@ -1,4 +1,4 @@
-# AutoLeap Addon `v1.1.0`
+# trji addon `v1.1.0`
 
 A Fabric client-side mod for Hypixel Skyblock Dungeons built on top of the Odin framework. Provides automated leaping, room timing, and a custom pets UI.
 
