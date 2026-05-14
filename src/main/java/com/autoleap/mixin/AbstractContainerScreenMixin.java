@@ -12,8 +12,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class AbstractContainerScreenMixin {
     @Inject(method = "render", at = @At("HEAD"), cancellable = true)
     private void onRender(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
-        if (PetsMenu.INSTANCE.isActive()) {
+        if (PetsMenuState.active) {
             ci.cancel();
+            PetsMenu.INSTANCE.drawOverlay(guiGraphics, mouseX, mouseY);
         }
     }
 }

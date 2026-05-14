@@ -1,7 +1,7 @@
 package com.autoleap.features
 
+import com.autoleap.mixin.PetsMenuState
 import com.odtheking.odin.clickgui.settings.impl.BooleanSetting
-import com.odtheking.odin.events.GuiEvent
 import com.odtheking.odin.events.ScreenEvent
 import com.odtheking.odin.events.core.on
 import com.odtheking.odin.features.Category
@@ -14,10 +14,8 @@ import com.odtheking.odin.utils.render.getStringWidth
 import com.odtheking.odin.utils.render.roundedFill
 import com.odtheking.odin.utils.render.text
 import net.minecraft.client.gui.GuiGraphics
-import net.minecraft.client.gui.screens.Screen
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen
 import net.minecraft.core.component.DataComponents
-import net.minecraft.network.chat.Component
-import net.minecraft.network.protocol.game.ServerboundContainerClosePacket
 import net.minecraft.world.inventory.AbstractContainerMenu
 import net.minecraft.world.inventory.ClickType
 import net.minecraft.world.item.ItemStack
@@ -46,8 +44,6 @@ object PetsMenu : Module(
     private val DIM      = Color(0xAA, 0xAA, 0xBB, 1.0f)
     private val BORDER   = Color(0x33, 0x33, 0x50, 1.0f)
 
-    fun isActive() = capturedMenu != null && enabled
-
     private var capturedMenu: AbstractContainerMenu? = null
     private val cardBounds = mutableMapOf<Int, IntArray>()
     private var lastMx = 0
@@ -59,20 +55,23 @@ object PetsMenu : Module(
             val clean = raw.noControlCodes.trim()
             if (debugTitles) modMessage("§7[PetsMenu] screen: \"$clean\" (raw: \"$raw\")")
             if (!clean.startsWith("Pets")) return@on
-            val menu = (screen as? net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<*>)?.menu
-                ?: return@on
+            val menu = (screen as? AbstractContainerScreen<*>)?.menu ?: return@on
             capturedMenu = menu
             cardBounds.clear()
-            mc.execute { if (enabled && mc.screen !is PetsScreen) mc.setScreen(PetsScreen) }
+            PetsMenuState.active = enabled
         }
 
-        // Suppress any Odin HUD/overlay container rendering while our screen is up
-        on<GuiEvent.Render> {
-            if (mc.screen is PetsScreen) cancel()
+        on<ScreenEvent.Close> {
+            val clean = screen.title.string.noControlCodes.trim()
+            if (!clean.startsWith("Pets")) return@on
+            if (screen !is AbstractContainerScreen<*>) return@on
+            PetsMenuState.active = false
+            capturedMenu = null
+            cardBounds.clear()
         }
 
         on<ScreenEvent.MouseClick> {
-            if (mc.screen !is PetsScreen) return@on
+            if (!PetsMenuState.active) return@on
             cancel()
             val entry = cardBounds.entries.firstOrNull { (_, b) ->
                 lastMx in b[0] until b[0] + b[2] && lastMy in b[1] until b[1] + b[3]
@@ -84,24 +83,12 @@ object PetsMenu : Module(
         }
     }
 
-    object PetsScreen : Screen(Component.literal("Pets")) {
-        override fun render(ctx: GuiGraphics, mx: Int, my: Int, delta: Float) {
-            val menu = capturedMenu ?: return
-            lastMx = mx
-            lastMy = my
-            draw(ctx, menu, mx, my, width, height)
-        }
-
-        override fun onClose() {
-            capturedMenu?.let { menu ->
-                mc.player?.connection?.send(ServerboundContainerClosePacket(menu.containerId))
-            }
-            capturedMenu = null
-            cardBounds.clear()
-            super.onClose()
-        }
-
-        override fun isPauseScreen() = false
+    // Called directly from AbstractContainerScreenMixin — replaces the vanilla render
+    fun drawOverlay(ctx: GuiGraphics, mx: Int, my: Int) {
+        val menu = capturedMenu ?: return
+        lastMx = mx
+        lastMy = my
+        draw(ctx, menu, mx, my, mc.window.guiScaledWidth, mc.window.guiScaledHeight)
     }
 
     private fun draw(ctx: GuiGraphics, menu: AbstractContainerMenu, mx: Int, my: Int, sw: Int, sh: Int) {
@@ -110,8 +97,7 @@ object PetsMenu : Module(
             .take(menuSlots)
             .filter { slot ->
                 val lore = slot.item.getOrDefault(DataComponents.LORE, ItemLore.EMPTY)
-                !slot.item.isEmpty &&
-                lore.lines().isNotEmpty() &&
+                !slot.item.isEmpty && lore.lines().isNotEmpty() &&
                 (!onlyFavorites || slot.item.displayName.string.contains("⭐"))
             }
 
