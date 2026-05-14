@@ -14,6 +14,9 @@ import net.minecraft.client.gui.GuiGraphics
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen
 import net.minecraft.client.input.KeyEvent
 import net.minecraft.client.input.MouseButtonEvent
+import com.mojang.blaze3d.platform.NativeImage
+import net.minecraft.client.renderer.RenderPipelines
+import net.minecraft.client.renderer.texture.DynamicTexture
 import net.minecraft.core.component.DataComponents
 import net.minecraft.network.chat.Component
 import net.minecraft.resources.Identifier
@@ -88,6 +91,9 @@ object PetsMenuV2 : Module(
             val DIM       = argb(0xFF, 0xAA, 0xAA, 0xBB)
             val PROGRESS  = argb(0xFF, 0x55, 0xFF, 0x55)
             val PROG_BACK = argb(0xFF, 0x22, 0x22, 0x22)
+
+            // null value = resource not found; int[] = [width, height]
+            val petTextureCache = mutableMapOf<Identifier, IntArray?>()
         }
 
         private data class Layout(
@@ -201,6 +207,20 @@ object PetsMenuV2 : Module(
             ctx.fill(x + lay.cardW - 1, y, x + lay.cardW, y + lay.cardH, bdr)
         }
 
+        private fun loadPetTexture(mc: Minecraft, loc: Identifier, label: String): IntArray? {
+            if (petTextureCache.containsKey(loc)) return petTextureCache[loc]
+            val dims = try {
+                val resource = mc.resourceManager.getResource(loc).orElse(null) ?: return null.also { petTextureCache[loc] = null }
+                val image = resource.open().use { NativeImage.read(it) }
+                val w = image.width
+                val h = image.height
+                mc.textureManager.register(loc, DynamicTexture({ label }, image))
+                intArrayOf(w, h)
+            } catch (e: Exception) { null }
+            petTextureCache[loc] = dims
+            return dims
+        }
+
         private fun renderIcon(ctx: GuiGraphics, stack: ItemStack, cx: Int, cy: Int, lay: Layout) {
             val sz      = lay.iconSz
             val scale   = sz / 16f
@@ -211,15 +231,18 @@ object PetsMenuV2 : Module(
             val textureId = petName.lowercase().replace(" ", "_").replace(Regex("[^a-z0-9_]"), "")
             val loc       = Identifier.parse("trji:textures/pets/$textureId.png")
             val mc        = Minecraft.getInstance()
-
-            val useCustom = try { mc.resourceManager.getResource(loc).isPresent } catch (e: Exception) { false }
+            val dims      = loadPetTexture(mc, loc, textureId)
 
             ctx.pose().pushMatrix()
             ctx.pose().translate(centerX, centerY)
             ctx.pose().scale(scale)
             try {
-                if (useCustom) ctx.blit(loc, -8, -8, 8, 8, 0.0f, 1.0f, 0.0f, 1.0f)
-                else           ctx.renderItem(stack, -8, -8)
+                if (dims != null) {
+                    val (w, h) = dims
+                    ctx.blit(RenderPipelines.GUI_TEXTURED, loc, -8, -8, 0.0f, 0.0f, 16, 16, w, h, w, h)
+                } else {
+                    ctx.renderItem(stack, -8, -8)
+                }
             } catch (e: Exception) {
                 ctx.renderItem(stack, -8, -8)
             }
