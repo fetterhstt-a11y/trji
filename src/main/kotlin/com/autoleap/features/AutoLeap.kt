@@ -33,10 +33,10 @@ object AutoLeap : Module(
     private val fastLeap by BooleanSetting("Fast Leap", desc = "Leaps to a configured class on InfiniLeap left click.")
     private val fastDelay by NumberSetting("Fast Leap Delay", 250.0f, 100.0, 500.0, 50.0, desc = "Minimum ms between fast leaps.")
     private val autoLeap by BooleanSetting("Auto Leap", desc = "Automatically leaps on boss chat triggers.")
-    private val p2AutoLeap by BooleanSetting("P2 Auto Leap", true, desc = "Automatically leap on P2 chat triggers.")
-    private val p5AutoLeap by BooleanSetting("P5 Auto Leap", true, desc = "Automatically leap on P5 chat triggers.")
+    private val p2AutoLeap by BooleanSetting("P2 Auto Leap", true, desc = "Automatically leap when Maxor dies.")
+    private val p5AutoLeap by BooleanSetting("P5 Auto Leap", true, desc = "Automatically leap when Necron dies.")
     private val pyAutoLeap by BooleanSetting("PY Auto Leap", true, desc = "Automatically leap on PY chat triggers.")
-    private val goldorAutoLeap by BooleanSetting("3x3 Auto Leap", true, desc = "Automatically leap on Goldor 3x3 chat trigger.")
+    private val goldorAutoLeap by BooleanSetting("3x3 Auto Leap", true, desc = "Automatically leap when Goldor dies.")
     private val printDialogue by BooleanSetting("Print Dialogue", desc = "Sends a message when a dialogue trigger is registered.")
     private val debugMode by BooleanSetting("Debug Mode", desc = "Prints debug info to chat.")
 
@@ -65,8 +65,8 @@ object AutoLeap : Module(
     private var leapDeadline = 0L
     private var leapClickTicks = 0
 
-    private val bossEventsField = BossHealthOverlay::class.java
-        .getDeclaredField("events")
+    private val bossEventsField = BossHealthOverlay::class.java.declaredFields
+        .first { Map::class.java.isAssignableFrom(it.type) }
         .also { it.isAccessible = true }
     private val prevBossProgress = mutableMapOf<UUID, Float>()
 
