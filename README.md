@@ -1,4 +1,4 @@
-# trji addon `v1.1.0`
+# trji addon `v1.2.1`
 
 A Fabric client-side mod for Hypixel Skyblock Dungeons built on top of the Odin framework. Provides automated leaping, room timing, and a custom pets UI.
 
@@ -104,8 +104,10 @@ Replaces the Hypixel pets menu with a modern grid-based UI. Click a pet card to 
 
 **UI**
 
-- 4-column card grid with pet icon, name, level, and a rarity color bar
-- Hover tooltip shows the full item tooltip
+- 4-column card grid with custom pet icon, clean name, level, and a rarity color bar
+- Custom icons are loaded from `trji:textures/pets/{petname}.png`; falls back to the item texture if none exists
+- Pet names are shown without level indicators, stars, or extra clutter (e.g. "Dragon" instead of "⭐ Dragon [Lvl 100]")
+- Hover tooltip shows the full item tooltip — tooltips are hidden automatically when Only Favorites is on
 - Transparent background — the game world is visible behind the panel
 
 Rarity colors: Legendary (orange) · Mythic (magenta) · Epic (purple) · Rare (blue) · Uncommon (green) · Common (gray)
@@ -132,6 +134,14 @@ Output jar: `build/libs/`
 ---
 
 ## Changelog
+
+### v1.2.1
+- **Fix**: Custom pet icons were not rendering — resolved texture loading issue.
+
+### v1.2.0
+- **Custom Pet Icons**: Pets Menu now renders custom textures (`trji:textures/pets/{petname}.png`) instead of raw item icons.
+- **Cleaner Pet Names**: Cards now display only the pet name, stripping level indicators, stars, and parenthetical text.
+- **No Tooltips in Favorites Mode**: Hovering over cards no longer shows a tooltip when Only Favorites is enabled, keeping the view clean.
 
 ### v1.1.0
 - **Auto Profile**: AutoLeap now automatically switches to the matching profile (Tank / Mage / Archer / Healer / Berserker) when you enter a dungeon, based on your detected class. Can be disabled in settings.
