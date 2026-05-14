@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "id": "odin",
+  "version": "0.1.9",
+  "name": "Odin",
+  "description": "A Hypixel Skyblock QoL mod",
+  "authors": [
+    "Odtheking"
+  ],
+  "contact": {
+    "homepage": "https://modrinth.com/mod/odin",
+    "sources": "https://github.com/odtheking/OdinFabric",
+    "issues": "https://github.com/odtheking/OdinFabric/issues"
+  },
+  "icon": "assets/odin/icon.png",
+  "license": "BSD 3-Clause",
+  "environment": "client",
+  "entrypoints": {
+    "modmenu": [
+      "com.odtheking.odin.clickgui.ModMenuIntegration"
+    ],
+    "client": [
+      {
+        "adapter": "kotlin",
+        "value": "com.odtheking.odin.OdinMod"
+      }
+    ]
+  },
+  "mixins": [
+    "odin.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": "\u003e\u003d0.18.5",
+    "fabric-api": "\u003e\u003d0.141.3+1.21.11",
+    "minecraft": "~1.21.11",
+    "fabric-language-kotlin": "\u003e\u003d1.13.10+kotlin.2.3.20"
+  },
+  "custom": {
+    "modmenu": {
+      "links": {
+        "modmenu.discord": "https://discord.gg/8Fqsg5xBP3"
+      },
+      "update_checker": true
+    }
+  },
+  "jars": [
+    {
+      "file": "META-INF/jars/Commodore-1.0.1.jar"
+    },
+    {
+      "file": "META-INF/jars/lwjgl-nanovg-3.3.3-natives-linux.jar"
+    },
+    {
+      "file": "META-INF/jars/lwjgl-nanovg-3.3.3-natives-macos-arm64.jar"
+    },
+    {
+      "file": "META-INF/jars/lwjgl-nanovg-3.3.3-natives-macos.jar"
+    },
+    {
+      "file": "META-INF/jars/lwjgl-nanovg-3.3.3-natives-windows.jar"
+    },
+    {
+      "file": "META-INF/jars/lwjgl-nanovg-3.3.3.jar"
+    }
+  ]
+}
