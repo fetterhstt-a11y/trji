@@ -40,6 +40,7 @@ object AutoLeap : Module(
     private val g3x3AutoSetting = BooleanSetting("3x3 Auto Leap", true, desc = "Automatically leap when Goldor dies.")
     private val sendLeapMessage by BooleanSetting("Leap Message", true, desc = "Send a message to party chat when leaping.")
     private val leapMessage by StringSetting("Leap Message Text", "[TRJI] §aLeaping to §b{player}§a!", desc = "Message sent to party chat when leaping. Use {player} for the target's name.")
+    private val autoProfile by BooleanSetting("Auto Profile", true, desc = "Automatically switch the active profile to match your dungeon class when entering a dungeon.")
     private val printDialogue by BooleanSetting("Print Dialogue", desc = "Sends a message when a trigger fires.")
     private val debugMode by BooleanSetting("Debug Mode", desc = "Prints debug info to chat.")
 
@@ -47,7 +48,8 @@ object AutoLeap : Module(
     val profileNames = listOf("Tank", "Mage", "Archer", "Healer", "Berserker")
     val sectionKeys  = listOf("Clear", "EE1", "EE2", "EE2Fallback", "EE3", "EE3Fallback", "EE4", "Core", "3x3", "Mid", "P5", "P2", "PY")
 
-    private val activeProfileSetting by SelectorSetting("Profile", "Tank", profileNames, desc = "Active leap profile.")
+    private val activeProfileSelector = SelectorSetting("Profile", "Tank", profileNames, desc = "Active leap profile.")
+    private val activeProfileSetting by activeProfileSelector
     private var p2AutoLeap     by p2AutoSetting
     private var p5AutoLeap     by p5AutoSetting
     private var pyAutoLeap     by pyAutoSetting
@@ -124,6 +126,7 @@ object AutoLeap : Module(
     // --- Runtime state ---
     private var lastClick = 0L
     private var pyAutoLeaped = false
+    private var autoProfileSwapped = false
     var currentSection = "Unknown"
         private set
 
@@ -152,6 +155,7 @@ object AutoLeap : Module(
 
         on<WorldEvent.Load> {
             pyAutoLeaped = false
+            autoProfileSwapped = false
             currentSection = "Unknown"
             leapState = LeapState.IDLE
             prevBossProgress.clear()
@@ -159,6 +163,7 @@ object AutoLeap : Module(
 
         on<TickEvent.Start> {
             if (DungeonUtils.inDungeons) updateCurrentSection()
+            if (!autoProfileSwapped) tryAutoSwapProfile()
             tickLeapStateMachine()
             syncProfile()
             if (autoLeap) checkBossDeaths()
@@ -200,6 +205,27 @@ object AutoLeap : Module(
             handleLeap(isAutoLeap = false)
             lastClick = now
         }
+    }
+
+    // --- Profile auto-swap ---
+
+    private fun tryAutoSwapProfile() {
+        if (!autoProfile || !DungeonUtils.inDungeons) return
+        val myClass = DungeonUtils.currentDungeonPlayer?.clazz?.name ?: return
+        val profileIndex = when (myClass) {
+            "Tank"    -> profileNames.indexOf("Tank")
+            "Mage"    -> profileNames.indexOf("Mage")
+            "Archer"  -> profileNames.indexOf("Archer")
+            "Healer"  -> profileNames.indexOf("Healer")
+            "Berserk" -> profileNames.indexOf("Berserker")
+            else      -> -1
+        }
+        if (profileIndex == -1) return
+        autoProfileSwapped = true
+        if (activeProfileSetting == profileIndex) return
+        setIndex(activeProfileSelector, profileIndex)
+        lastProfileIndex = -1
+        modMessage("§7[AutoLeap] Auto-switched profile to §e${profileNames[profileIndex]}§7.")
     }
 
     // --- Profile sync ---

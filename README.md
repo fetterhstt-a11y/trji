@@ -1,4 +1,4 @@
-# AutoLeap Addon
+# AutoLeap Addon `v1.1.0`
 
 A Fabric client-side mod for Hypixel Skyblock Dungeons built on top of the Odin framework. Provides automated leaping, room timing, and a custom pets UI.
 
@@ -25,6 +25,7 @@ Automatically leaps to a configured teammate based on your current dungeon secti
 | 3x3 Auto Leap | ON | Auto leap when Goldor dies (per-profile) |
 | Leap Message | ON | Send a party chat message when leaping |
 | Leap Message Text | `[TRJI] Leaping to {player}!` | Message text — use `{player}` as a placeholder for the target's name |
+| Auto Profile | ON | Automatically switch the active profile to match your dungeon class when entering a dungeon |
 | Print Dialogue | OFF | Log detected trigger messages to chat |
 | Debug Mode | OFF | Print section coordinates and debug info to chat |
 
@@ -127,3 +128,13 @@ Rarity colors: Legendary (orange) · Mythic (magenta) · Epic (purple) · Rare (
 ```
 
 Output jar: `build/libs/`
+
+---
+
+## Changelog
+
+### v1.1.0
+- **Auto Profile**: AutoLeap now automatically switches to the matching profile (Tank / Mage / Archer / Healer / Berserker) when you enter a dungeon, based on your detected class. Can be disabled in settings.
+
+### v1.0.0
+- Initial release: Auto Leap, Big Timer, Pets Menu
