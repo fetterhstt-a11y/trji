@@ -9,7 +9,7 @@ plugins {
 }
 
 val mc = "1.21.11"
-version = "1.2.0"
+version = "1.2.1"
 group = "com.autoleap"
 base.archivesName = "trji"
 
