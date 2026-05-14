@@ -107,8 +107,9 @@ object PetsMenu : Module(
         val pets = menu.slots
             .take(menuSlots)
             .filter { slot ->
-                val name = slot.item.displayName.string.noControlCodes.trim()
-                !slot.item.isEmpty && name.length > 3 &&
+                val lore = slot.item.getOrDefault(DataComponents.LORE, ItemLore.EMPTY)
+                !slot.item.isEmpty &&
+                lore.lines().isNotEmpty() &&
                 (!onlyFavorites || slot.item.displayName.string.contains("⭐"))
             }
 
