@@ -1,4 +1,3 @@
-<img width="816" height="379" alt="Screenshot 2026-05-14 225119" src="https://github.com/user-attachments/assets/8f1775e5-8d93-40bf-88e4-7ed86e9cbb9b" />
 # trji addon `v1.2.1`
 
 A Fabric client-side mod for Hypixel Skyblock Dungeons built on top of the Odin framework. Provides automated leaping, room timing, and a custom pets UI.
@@ -110,6 +109,7 @@ Replaces the Hypixel pets menu with a modern grid-based UI. Click a pet card to 
 - Pet names are shown without level indicators, stars, or extra clutter (e.g. "Dragon" instead of "⭐ Dragon [Lvl 100]")
 - Hover tooltip shows the full item tooltip — tooltips are hidden automatically when Only Favorites is on
 - Transparent background — the game world is visible behind the panel
+<img width="816" height="379" alt="Screenshot 2026-05-14 225119" src="https://github.com/user-attachments/assets/8f1775e5-8d93-40bf-88e4-7ed86e9cbb9b" />
 
 Rarity colors: Legendary (orange) · Mythic (magenta) · Epic (purple) · Rare (blue) · Uncommon (green) · Common (gray)
 
