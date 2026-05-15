@@ -1,3 +1,4 @@
+<img width="816" height="379" alt="Screenshot 2026-05-14 225119" src="https://github.com/user-attachments/assets/8f1775e5-8d93-40bf-88e4-7ed86e9cbb9b" />
 # trji addon `v1.2.1`
 
 A Fabric client-side mod for Hypixel Skyblock Dungeons built on top of the Odin framework. Provides automated leaping, room timing, and a custom pets UI.
